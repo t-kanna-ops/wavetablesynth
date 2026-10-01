@@ -1,0 +1,1958 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Layered Wavetable Synth Studio with Multi-Layered Visualizer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --bg-color: #0d0f17;
+      --panel-bg: #161926;
+      --panel-border: #262b3d;
+      --accent-color: #00f0ff;
+      --accent-hover: #60f5ff;
+      --text-color: #e2e8f0;
+      --text-dim: #8e9bb0;
+      --mod-active: #ff0055;
+      --fx-color: #ff9f43;
+      --viz-color: #a855f7;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      padding: 12px;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-color); }
+    ::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 3px; }
+
+    /* Header styling */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--panel-border);
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    h1 { font-size: 1.3rem; font-weight: 800; color: var(--accent-color); letter-spacing: 1px; }
+
+    .btn {
+      background: var(--accent-color);
+      color: #000;
+      border: none;
+      padding: 5px 12px;
+      font-weight: 700;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-size: 0.8rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+    .btn-danger { background: #ff4757; color: #fff; }
+    .btn-danger:hover { background: #ff6b81; }
+    .btn-fx { background: var(--fx-color); color: #000; }
+    .btn-cam { background: #2ed573; color: #000; }
+    .btn-viz { background: var(--viz-color); color: #fff; }
+    .btn-viz:hover { background: #c084fc; }
+
+    /* Panels Grid Layout */
+    .top-panels {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+
+    .panel-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--accent-color);
+      margin-bottom: 8px;
+      border-bottom: 1px solid var(--panel-border);
+      padding-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .control-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .control-group label {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    input[type="range"] {
+      accent-color: var(--accent-color);
+      cursor: pointer;
+    }
+
+    select, input[type="text"], input[type="number"], input[type="color"] {
+      background: #0f111a;
+      color: #fff;
+      border: 1px solid var(--panel-border);
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      outline: none;
+    }
+
+    /* Modifiable Parameter Indication */
+    .mod-param {
+      position: relative;
+      padding: 3px 6px;
+      border-radius: 4px;
+      border: 1px dashed rgba(255,255,255,0.1);
+      transition: border-color 0.2s;
+    }
+    .mod-param:hover { border-color: var(--accent-color); background: rgba(255,255,255,0.03); }
+    .mod-param.has-mod::after {
+      content: 'MOD';
+      position: absolute;
+      top: 1px;
+      right: 2px;
+      font-size: 0.5rem;
+      color: var(--mod-active);
+      font-weight: 900;
+    }
+
+    .chord-display {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--accent-color);
+      min-width: 60px;
+      text-align: center;
+      background: #0f111a;
+      padding: 3px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--panel-border);
+    }
+
+    /* Section Boxes */
+    .section-box {
+      background: rgba(0,0,0,0.3);
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid var(--panel-border);
+    }
+
+    .section-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--accent-color);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+
+    /* VCO Layers Container */
+    #layers-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .vco-layer {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-left: 4px solid var(--accent-color);
+      border-radius: 8px;
+      padding: 10px;
+    }
+
+    .vco-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .vco-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    /* Sequencer Grid */
+    .sequencer-grid {
+      display: grid;
+      grid-template-columns: repeat(16, 1fr);
+      gap: 2px;
+      overflow-x: auto;
+    }
+
+    .seq-step {
+      background: #0f111a;
+      border: 1px solid var(--panel-border);
+      border-radius: 4px;
+      padding: 3px 2px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .seq-step.playing {
+      background: rgba(0, 240, 255, 0.25);
+      border-color: var(--accent-color);
+    }
+
+    .seq-step input[type="range"] {
+      width: 100%;
+      height: 40px;
+      writing-mode: bt-lr;
+      appearance: slider-vertical;
+    }
+
+    .seq-step select { width: 100%; font-size: 0.55rem; border: none; padding: 1px; }
+
+    /* Camera Feed Preview */
+    .cam-preview-box {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 6px;
+      background: rgba(0,0,0,0.3);
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    canvas#cam-canvas {
+      width: 80px;
+      height: 45px;
+      background: #000;
+      border: 1px solid var(--accent-color);
+      image-rendering: pixelated;
+    }
+
+    /* Context Menu */
+    #mod-menu {
+      position: absolute;
+      display: none;
+      background: #1c2030;
+      border: 1px solid var(--accent-color);
+      border-radius: 6px;
+      padding: 10px;
+      z-index: 1000;
+      width: 220px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.8);
+    }
+
+    .status-bar {
+      margin-top: 12px;
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      background: var(--panel-bg);
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--panel-border);
+    }
+
+    /* Visualizer Fallback Modal Overlay */
+    #viz-modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.95);
+      z-index: 2000;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #viz-modal canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    #viz-modal-close {
+      position: absolute;
+      top: 15px;
+      right: 20px;
+      z-index: 2010;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>WAVETABLE SYNTH STUDIO</h1>
+    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+      <button id="btn-audio-init" class="btn">🔊 Audio Start</button>
+      <button id="btn-open-viz" class="btn btn-viz">📺 Open Visualizer Window</button>
+      <button id="btn-add-vco" class="btn">+ Add VCO Layer</button>
+      <button id="btn-save-json" class="btn btn-fx">💾 Save JSON</button>
+      <button id="btn-load-json" class="btn btn-fx">📂 Load JSON</button>
+      <input type="file" id="json-file-input" accept=".json" style="display:none;">
+    </div>
+  </header>
+
+  <!-- Top Management Panels -->
+  <div class="top-panels">
+    <!-- Panel 1: Master & Chord Control -->
+    <div class="panel">
+      <div class="panel-title">Master & Sequencer Control</div>
+      <div class="control-row">
+        <div class="control-group">
+          <label>Master Vol</label>
+          <input type="range" id="master-vol" min="0" max="1" step="0.01" value="0.7">
+        </div>
+        <div class="control-group">
+          <label>BPM (<span id="bpm-val">120</span>)</label>
+          <input type="range" id="master-bpm" min="40" max="240" step="1" value="120">
+        </div>
+        <div class="control-group">
+          <label>Transpose (<span id="transpose-val">0</span>)</label>
+          <input type="range" id="master-transpose" min="-12" max="12" step="1" value="0">
+        </div>
+        <div class="control-group mod-param" data-param-id="chordSlider">
+          <label>Chord Select</label>
+          <input type="range" id="chord-slider" min="0" max="8" step="0.01" value="0">
+        </div>
+        
+        <!-- Chord Change Timing Rate Slider -->
+        <div class="control-group mod-param" data-param-id="chordRate">
+          <label>Chord Rate (<span id="chord-rate-val">1/1</span>)</label>
+          <input type="range" id="chord-rate-slider" min="0" max="4" step="0.01" value="2">
+        </div>
+
+        <div class="control-group">
+          <label>Chord</label>
+          <div class="chord-display" id="chord-name">CM7</div>
+        </div>
+        <div class="control-group">
+          <label>Transport</label>
+          <button id="btn-play" class="btn">▶ Play</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel 2: Modulation, Sensors & Particle Controls -->
+    <div class="panel">
+      <div class="panel-title">
+        Modulation, Sensors & Particle Settings
+        <button id="btn-add-lfo" class="btn" style="padding: 2px 6px; font-size: 0.7rem;">+ Add LFO</button>
+      </div>
+      
+      <!-- LFO Container -->
+      <div id="lfos-container" style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;"></div>
+
+      <!-- Mouse & Camera Settings -->
+      <div class="control-row" style="border-top: 1px solid var(--panel-border); padding-top: 6px; margin-bottom: 6px;">
+        <div class="control-group">
+          <label>Mouse Sens</label>
+          <input type="range" id="mouse-sens" min="0.1" max="3" step="0.1" value="1.0">
+        </div>
+        <div class="control-group">
+          <label>Camera Device</label>
+          <div style="display:flex; gap:3px;">
+            <button id="btn-start-cam" class="btn btn-cam" style="padding:2px 5px; font-size:0.65rem;">🎥 Enable</button>
+            <select id="cam-select" style="max-width: 100px;"><option value="">Select...</option></select>
+          </div>
+        </div>
+        <div class="control-group">
+          <label>Cam Brightness</label>
+          <input type="range" id="cam-brightness" min="0.5" max="2.0" step="0.05" value="1.0">
+        </div>
+        <div class="control-group">
+          <label>Cam Contrast</label>
+          <input type="range" id="cam-contrast" min="0.5" max="3.0" step="0.05" value="1.0">
+        </div>
+      </div>
+
+      <!-- Modulatable Mouse Particle Settings -->
+      <div class="section-box" style="margin-top: 4px;">
+        <div class="section-title">Visualizer Particle Trail Settings</div>
+        <div class="control-row">
+          <div class="control-group">
+            <label>Shape</label>
+            <select id="particle-shape">
+              <option value="circle">Circle</option>
+              <option value="square">Square</option>
+              <option value="star">Star</option>
+              <option value="ring">Ring</option>
+              <option value="spark">Spark</option>
+            </select>
+          </div>
+          <div class="control-group mod-param" data-param-id="particleRatio">
+            <label>Density / Ratio</label>
+            <input type="range" id="particle-ratio-slider" min="0.1" max="5.0" step="0.1" value="1.0">
+          </div>
+          <div class="control-group mod-param" data-param-id="particleSize">
+            <label>Base Size</label>
+            <input type="range" id="particle-size-slider" min="2" max="50" step="1" value="12">
+          </div>
+        </div>
+      </div>
+
+      <div class="cam-preview-box">
+        <canvas id="cam-canvas" width="80" height="45"></canvas>
+        <video id="cam-video" style="display:none;" autoplay playsinline muted></video>
+        <div style="font-size: 0.65rem; color: var(--text-dim);">
+          <div id="cam-status" style="color:var(--accent-color); font-weight:bold;">Camera: Standby</div>
+          Downsampled to 80x45 | Frame Motion Tracking
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel 3: Master FX -->
+    <div class="panel">
+      <div class="panel-title">Master Audio Effects</div>
+      <div class="control-row">
+        <div class="section-box" style="flex: 1;">
+          <div class="section-title">Distortion</div>
+          <div class="control-group"><label>Drive</label><input type="range" id="fx-dist-drive" min="0" max="100" value="0"></div>
+        </div>
+        <div class="section-box" style="flex: 1;">
+          <div class="section-title">Chorus</div>
+          <div class="control-group"><label>Rate</label><input type="range" id="fx-chorus-rate" min="0.1" max="5" step="0.1" value="1.5"></div>
+          <div class="control-group"><label>Depth</label><input type="range" id="fx-chorus-depth" min="0" max="1" step="0.01" value="0.3"></div>
+        </div>
+        <div class="section-box" style="flex: 1;">
+          <div class="section-title">Stereo Delay</div>
+          <div class="control-group"><label>Time L/R</label><input type="range" id="fx-delay-time" min="0.05" max="1" step="0.01" value="0.3"></div>
+          <div class="control-group"><label>Feedback</label><input type="range" id="fx-delay-fb" min="0" max="0.85" step="0.01" value="0.4"></div>
+        </div>
+        <div class="section-box" style="flex: 1;">
+          <div class="section-title">Reverb</div>
+          <div class="control-group"><label>Decay Time</label><input type="range" id="fx-verb-time" min="0.5" max="5" step="0.1" value="2.0"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VCO Layers Container -->
+  <div id="layers-container"></div>
+
+  <!-- Status Bar -->
+  <div class="status-bar">
+    <div>Mouse X: <span id="val-mx">0.00</span></div>
+    <div>Mouse Y: <span id="val-my">0.00</span></div>
+    <div>Mouse Speed: <span id="val-ms">0.00</span></div>
+    <div>Cam X: <span id="val-cx">0.00</span></div>
+    <div>Cam Y: <span id="val-cy">0.00</span></div>
+    <div>Cam Motion: <span id="val-cm">0.00</span></div>
+    <div>Visualizer: <span id="val-viz-status" style="color:var(--accent-color);">Closed</span></div>
+  </div>
+
+  <!-- Context Menu for Modulation -->
+  <div id="mod-menu">
+    <h4 id="mod-target-title" style="font-size: 0.75rem; color: var(--accent-color); margin-bottom: 4px; font-weight:bold;">Modulation Target</h4>
+    <label style="font-size: 0.65rem; color: var(--text-dim);">Source:</label>
+    <select id="mod-source-select" style="width:100%; margin-bottom: 4px;"></select>
+    <label style="font-size: 0.65rem; color: var(--text-dim);">Amount (-1.0 to 1.0):</label>
+    <input type="range" id="mod-amount-range" min="-1" max="1" step="0.01" value="0" style="width:100%; margin-bottom: 6px;">
+    <div style="display: flex; gap: 4px;">
+      <button id="mod-save-btn" class="btn" style="flex:1; padding: 3px; font-size: 0.7rem;">Save</button>
+      <button id="mod-close-btn" class="btn btn-danger" style="flex:1; padding: 3px; font-size: 0.7rem;">Close</button>
+    </div>
+  </div>
+
+  <!-- Fallback Visualizer Modal -->
+  <div id="viz-modal">
+    <button id="viz-modal-close" class="btn btn-danger">✕ Close Visualizer Overlay</button>
+    <canvas id="modal-viz-canvas" width="1920" height="1080"></canvas>
+  </div>
+
+  <script>
+    // --- Chord Table & Definitions ---
+    const CHORD_TABLE = [
+      { name: "CM7",   notes: [60, 64, 67, 71] },
+      { name: "Am7",   notes: [57, 60, 64, 67] },
+      { name: "FM7",   notes: [53, 57, 60, 64] },
+      { name: "Dm7",   notes: [50, 53, 57, 60] },
+      { name: "Dm9",   notes: [50, 53, 57, 60, 64] },
+      { name: "Cadd9", notes: [60, 64, 67, 74] },
+      { name: "Em7",   notes: [52, 55, 59, 62] },
+      { name: "G7",    notes: [55, 59, 62, 65] },
+      { name: "E7",    notes: [52, 56, 59, 62] }
+    ];
+
+    const OVERRIDE_CHORDS = {
+      "G7": { name: "C",  notes: [60, 64, 67] },
+      "E7": { name: "Am", notes: [57, 60, 64] }
+    };
+
+    const CHORD_CHANGE_RATES = [
+      { label: "4/1 (4 Bars)", steps: 64 },
+      { label: "2/1 (2 Bars)", steps: 32 },
+      { label: "1/1 (1 Bar)",  steps: 16 },
+      { label: "1/2 (Half)",   steps: 8 },
+      { label: "1/4 (Quarter)",steps: 4 }
+    ];
+
+    const NOTE_DURATIONS = [
+      { label: '1/1', ratio: 4.0 },
+      { label: '1/2', ratio: 2.0 },
+      { label: '1/4', ratio: 1.0 },
+      { label: '1/8', ratio: 0.5 },
+      { label: '1/16', ratio: 0.25 },
+      { label: '1/32', ratio: 0.125 }
+    ];
+
+    // --- Global State & Modulation Sources ---
+    let audioCtx = null;
+    let masterGain = null;
+
+    // Master FX Nodes
+    let fxDistortion = null;
+    let fxChorusDelay = null, fxChorusLfo = null;
+    let fxDelayL = null, fxDelayR = null, fxDelayFbGain = null;
+    let fxReverbConvolver = null;
+
+    // Modulation Sources Map
+    const modSources = {
+      mouseX: 0.5,
+      mouseY: 0.5,
+      mouseSpeed: 0,
+      camX: 0.5,
+      camY: 0.5,
+      camMotion: 0
+    };
+
+    const modAssignments = {};
+    let lfoList = [];
+    let lfoIdCounter = 0;
+
+    let lastPlayedChordName = "";
+    let isPlaying = false;
+    let currentStep = 0;
+    let totalElapsedSteps = 0;
+    let currentChordObj = CHORD_TABLE[0];
+    let seqTimer = null;
+    let vcoLayers = [];
+    let layerIdCounter = 0;
+
+    // Mouse Speed Tracking
+    let prevMousePos = { x: 0, y: 0 };
+    let rawMouseSpeed = 0;
+
+    window.addEventListener('mousemove', (e) => {
+      modSources.mouseX = e.clientX / window.innerWidth;
+      modSources.mouseY = 1.0 - (e.clientY / window.innerHeight);
+
+      const dx = e.clientX - prevMousePos.x;
+      const dy = e.clientY - prevMousePos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const sens = parseFloat(document.getElementById('mouse-sens').value);
+      rawMouseSpeed = Math.min((dist / 40) * sens, 1.0);
+      prevMousePos = { x: e.clientX, y: e.clientY };
+
+      document.getElementById('val-mx').textContent = modSources.mouseX.toFixed(2);
+      document.getElementById('val-my').textContent = modSources.mouseY.toFixed(2);
+    });
+
+    setInterval(() => {
+      rawMouseSpeed *= 0.8;
+      modSources.mouseSpeed = rawMouseSpeed;
+      document.getElementById('val-ms').textContent = modSources.mouseSpeed.toFixed(2);
+    }, 50);
+
+    // --- LFO Engine Class ---
+    class LFO {
+      constructor(id) {
+        this.id = id;
+        this.type = 'sine';
+        this.mode = 'ms';
+        this.msPeriod = 1000;
+        this.noteRatio = 1.0;
+        this.phase = 0;
+        this.value = 0;
+      }
+
+      update(dtMs, bpm) {
+        let periodMs = this.msPeriod;
+        if (this.mode === 'note') {
+          const quarterNoteMs = (60 / bpm) * 1000;
+          periodMs = quarterNoteMs * this.noteRatio;
+        }
+        if (periodMs <= 0) periodMs = 100;
+
+        const freqHz = 1000 / periodMs;
+        this.phase += (freqHz * (dtMs / 1000)) * 2 * Math.PI;
+
+        switch (this.type) {
+          case 'square':
+            this.value = Math.sin(this.phase) >= 0 ? 1 : 0;
+            break;
+          case 'saw':
+            this.value = (this.phase / (2 * Math.PI)) % 1;
+            break;
+          case 'triangle':
+            const norm = (this.phase / (2 * Math.PI)) % 1;
+            this.value = Math.abs(norm - 0.5) * 2;
+            break;
+          case 'random':
+            if (Math.floor(this.phase / (2 * Math.PI)) !== Math.floor((this.phase - (freqHz * (dtMs / 1000) * 2 * Math.PI)) / (2 * Math.PI))) {
+              this.value = Math.random();
+            }
+            break;
+          case 'sine':
+          default:
+            this.value = (Math.sin(this.phase) + 1) / 2;
+            break;
+        }
+
+        modSources[`lfo_${this.id}`] = this.value;
+      }
+    }
+
+    function addLFO() {
+      lfoIdCounter++;
+      const lfo = new LFO(lfoIdCounter);
+      lfoList.push(lfo);
+      renderLFOUI(lfo);
+      updateModSourceOptions();
+    }
+
+    function removeLFO(id) {
+      lfoList = lfoList.filter(l => l.id !== id);
+      delete modSources[`lfo_${id}`];
+      const elem = document.getElementById(`lfo-box-${id}`);
+      if (elem) elem.remove();
+      updateModSourceOptions();
+    }
+
+    function renderLFOUI(lfo) {
+      const container = document.getElementById('lfos-container');
+      const box = document.createElement('div');
+      box.className = 'section-box';
+      box.id = `lfo-box-${lfo.id}`;
+      box.style.display = 'flex';
+      box.style.gap = '6px';
+      box.style.alignItems = 'center';
+
+      box.innerHTML = `
+        <span style="font-size:0.7rem; font-weight:bold; color:var(--accent-color);">LFO ${lfo.id}</span>
+        <select class="lfo-wave" style="font-size:0.65rem;">
+          <option value="sine">Sine</option>
+          <option value="triangle">Triangle</option>
+          <option value="square">Square</option>
+          <option value="saw">Saw</option>
+          <option value="random">S&H</option>
+        </select>
+        <select class="lfo-mode" style="font-size:0.65rem;">
+          <option value="ms">ms Period</option>
+          <option value="note">Note Sync</option>
+        </select>
+        <div class="lfo-val-input">
+          <input type="number" class="lfo-ms" value="1000" min="10" max="10000" style="width:55px;"> ms
+        </div>
+        <button class="btn btn-danger" style="padding:1px 4px; font-size:0.6rem;" onclick="removeLFO(${lfo.id})">✕</button>
+      `;
+
+      const waveSel = box.querySelector('.lfo-wave');
+      const modeSel = box.querySelector('.lfo-mode');
+      const valContainer = box.querySelector('.lfo-val-input');
+
+      waveSel.addEventListener('change', (e) => lfo.type = e.target.value);
+      
+      const updateValControl = () => {
+        lfo.mode = modeSel.value;
+        if (lfo.mode === 'ms') {
+          valContainer.innerHTML = `<input type="number" class="lfo-ms" value="${lfo.msPeriod}" min="10" max="10000" style="width:55px;"> ms`;
+          valContainer.querySelector('.lfo-ms').addEventListener('input', (e) => lfo.msPeriod = parseFloat(e.target.value) || 100);
+        } else {
+          valContainer.innerHTML = `
+            <select class="lfo-note-sel">
+              ${NOTE_DURATIONS.map(n => `<option value="${n.ratio}" ${n.ratio === lfo.noteRatio ? 'selected' : ''}>${n.label}</option>`).join('')}
+            </select>
+          `;
+          valContainer.querySelector('.lfo-note-sel').addEventListener('change', (e) => lfo.noteRatio = parseFloat(e.target.value));
+        }
+      };
+
+      modeSel.addEventListener('change', updateValControl);
+      updateValControl();
+      container.appendChild(box);
+    }
+
+    let lastLfoTime = performance.now();
+    setInterval(() => {
+      const now = performance.now();
+      const dtMs = now - lastLfoTime;
+      lastLfoTime = now;
+      const bpm = parseFloat(document.getElementById('master-bpm').value) || 120;
+      lfoList.forEach(l => l.update(dtMs, bpm));
+    }, 20);
+
+    // --- Web Audio Setup ---
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        masterGain = audioCtx.createGain();
+        masterGain.gain.value = parseFloat(document.getElementById('master-vol').value);
+
+        setupEffects();
+        masterGain.connect(audioCtx.destination);
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function setupEffects() {
+      fxDistortion = audioCtx.createWaveShaper();
+      updateDistortionCurve(0);
+
+      fxChorusDelay = audioCtx.createDelay();
+      fxChorusDelay.delayTime.value = 0.02;
+      fxChorusLfo = audioCtx.createOscillator();
+      const chorusLfoGain = audioCtx.createGain();
+      chorusLfoGain.gain.value = 0.002;
+      fxChorusLfo.frequency.value = 1.5;
+      fxChorusLfo.connect(chorusLfoGain);
+      chorusLfoGain.connect(fxChorusDelay.delayTime);
+      fxChorusLfo.start();
+
+      fxDelayL = audioCtx.createDelay();
+      fxDelayR = audioCtx.createDelay();
+      fxDelayFbGain = audioCtx.createGain();
+      const merger = audioCtx.createChannelMerger(2);
+
+      fxDelayL.delayTime.value = 0.3;
+      fxDelayR.delayTime.value = 0.45;
+      fxDelayFbGain.gain.value = 0.4;
+
+      fxDelayL.connect(fxDelayFbGain);
+      fxDelayFbGain.connect(fxDelayR);
+      fxDelayR.connect(fxDelayL);
+
+      fxDelayL.connect(merger, 0, 0);
+      fxDelayR.connect(merger, 0, 1);
+
+      fxReverbConvolver = audioCtx.createConvolver();
+      updateReverbImpulse(2.0);
+
+      fxDistortion.connect(masterGain);
+      fxChorusDelay.connect(masterGain);
+      merger.connect(masterGain);
+      fxReverbConvolver.connect(masterGain);
+
+      document.getElementById('fx-dist-drive').addEventListener('input', (e) => updateDistortionCurve(parseFloat(e.target.value)));
+      document.getElementById('fx-chorus-rate').addEventListener('input', (e) => fxChorusLfo.frequency.value = parseFloat(e.target.value));
+      document.getElementById('fx-delay-time').addEventListener('input', (e) => {
+        const t = parseFloat(e.target.value);
+        fxDelayL.delayTime.value = t;
+        fxDelayR.delayTime.value = t * 1.5;
+      });
+      document.getElementById('fx-delay-fb').addEventListener('input', (e) => fxDelayFbGain.gain.value = parseFloat(e.target.value));
+      document.getElementById('fx-verb-time').addEventListener('input', (e) => updateReverbImpulse(parseFloat(e.target.value)));
+    }
+
+    function updateDistortionCurve(drive) {
+      if (!fxDistortion) return;
+      const k = drive;
+      const n_samples = 44100;
+      const curve = new Float32Array(n_samples);
+      const deg = Math.PI / 180;
+      for (let i = 0; i < n_samples; ++i) {
+        let x = (i * 2) / n_samples - 1;
+        curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+      }
+      fxDistortion.curve = curve;
+    }
+
+    function updateReverbImpulse(duration) {
+      if (!audioCtx || !fxReverbConvolver) return;
+      const rate = audioCtx.sampleRate;
+      const length = rate * duration;
+      const impulse = audioCtx.createBuffer(2, length, rate);
+      for (let channel = 0; channel < 2; channel++) {
+        const data = impulse.getChannelData(channel);
+        for (let i = 0; i < length; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2);
+        }
+      }
+      fxReverbConvolver.buffer = impulse;
+    }
+
+    function createCustomWavetable(ctx, position) {
+      const real = new Float32Array(64);
+      const imag = new Float32Array(64);
+      const pos = Math.max(0, Math.min(1, position));
+
+      for (let n = 1; n < 64; n++) {
+        let sineHarm = (n === 1) ? 1 : 0;
+        let sqHarm   = (n % 2 !== 0) ? (4 / (Math.PI * n)) : 0;
+        let triHarm  = (n % 2 !== 0) ? (8 / (Math.PI * Math.PI * n * n)) : 0;
+        let sawHarm  = (2 / (Math.PI * n));
+
+        let amp = 0;
+        if (pos <= 0.33) {
+          let t = pos / 0.33;
+          amp = sineHarm * (1 - t) + sqHarm * t;
+        } else if (pos <= 0.66) {
+          let t = (pos - 0.33) / 0.33;
+          amp = sqHarm * (1 - t) + triHarm * t;
+        } else {
+          let t = (pos - 0.66) / 0.34;
+          amp = triHarm * (1 - t) + sawHarm * t;
+        }
+        imag[n] = amp;
+      }
+      return ctx.createPeriodicWave(real, imag);
+    }
+
+    // --- VCO Layer Class (Includes dedicated AnalyserNode per layer) ---
+    class VCOLayer {
+      constructor(id, container) {
+        this.id = id;
+        this.container = container;
+        
+        // Audio Analyser for Visualizer
+        this.analyser = null;
+        if (audioCtx) {
+          this.analyser = audioCtx.createAnalyser();
+          this.analyser.fftSize = 512;
+        }
+
+        this.params = {
+          wtPos: 0,
+          cutoff: 2000,
+          resonance: 1,
+          filterType: 'lowpass',
+          attack: 0.01,
+          decay: 0.2,
+          sustain: 0.5,
+          release: 0.3,
+          sendDist: 0,
+          sendChorus: 0,
+          sendDelay: 0,
+          sendReverb: 0,
+          // Visualizer Config
+          vizColor: `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`,
+          vizLineWidth: 3,
+          vizShape: 'circular'
+        };
+
+        this.steps = Array.from({ length: 16 }, () => ({ active: true, velocity: 0.8, noteVal: '0' }));
+        this.element = this.createUI();
+        this.container.appendChild(this.element);
+      }
+
+      createUI() {
+        const layer = document.createElement('div');
+        layer.className = 'vco-layer';
+        layer.id = `layer-${this.id}`;
+
+        layer.innerHTML = `
+          <div class="vco-header">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-weight:bold; font-size:0.95rem; color:var(--accent-color);">VCO Layer #${this.id}</span>
+              <input type="color" class="viz-color-picker" value="${this.params.vizColor}" title="Layer Visualizer Color">
+            </div>
+            <button class="btn btn-danger" onclick="removeLayer(${this.id})">Delete Layer</button>
+          </div>
+          <div class="vco-grid">
+            <!-- Oscillator -->
+            <div class="section-box">
+              <div class="section-title">Wavetable Oscillator</div>
+              <div class="control-group">
+                <label>Preset Wave</label>
+                <select class="wave-preset">
+                  <option value="0">Sine</option>
+                  <option value="0.33">Square</option>
+                  <option value="0.66">Triangle</option>
+                  <option value="1.0">Saw</option>
+                </select>
+              </div>
+              <div class="control-group mod-param" data-param-id="layer_${this.id}_wtPos">
+                <label>WT Position</label>
+                <input type="range" class="wt-pos" min="0" max="1" step="0.01" value="0">
+              </div>
+            </div>
+
+            <!-- Filter -->
+            <div class="section-box">
+              <div class="section-title">VCF (Filter)</div>
+              <div class="control-group">
+                <label>Type</label>
+                <select class="filter-type">
+                  <option value="lowpass">Lowpass</option>
+                  <option value="highpass">Highpass</option>
+                  <option value="bandpass">Bandpass</option>
+                </select>
+              </div>
+              <div class="control-group mod-param" data-param-id="layer_${this.id}_cutoff">
+                <label>Cutoff</label>
+                <input type="range" class="filter-cutoff" min="20" max="15000" step="1" value="2000">
+              </div>
+              <div class="control-group mod-param" data-param-id="layer_${this.id}_resonance">
+                <label>Reso</label>
+                <input type="range" class="filter-reso" min="0.1" max="20" step="0.1" value="1">
+              </div>
+            </div>
+
+            <!-- Envelope -->
+            <div class="section-box">
+              <div class="section-title">ADSR Envelope</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                <div class="control-group mod-param" data-param-id="layer_${this.id}_attack"><label>A</label><input type="range" class="env-a" min="0.001" max="2" step="0.01" value="0.01"></div>
+                <div class="control-group mod-param" data-param-id="layer_${this.id}_decay"><label>D</label><input type="range" class="env-d" min="0.01" max="2" step="0.01" value="0.2"></div>
+                <div class="control-group mod-param" data-param-id="layer_${this.id}_sustain"><label>S</label><input type="range" class="env-s" min="0" max="1" step="0.01" value="0.5"></div>
+                <div class="control-group mod-param" data-param-id="layer_${this.id}_release"><label>R</label><input type="range" class="env-r" min="0.01" max="3" step="0.01" value="0.3"></div>
+              </div>
+            </div>
+
+            <!-- FX Send Levels -->
+            <div class="section-box">
+              <div class="section-title" style="color:var(--fx-color);">FX Send Levels</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                <div class="control-group"><label>Dist</label><input type="range" class="send-dist" min="0" max="1" step="0.01" value="0"></div>
+                <div class="control-group"><label>Chorus</label><input type="range" class="send-chorus" min="0" max="1" step="0.01" value="0"></div>
+                <div class="control-group"><label>Delay</label><input type="range" class="send-delay" min="0" max="1" step="0.01" value="0"></div>
+                <div class="control-group"><label>Reverb</label><input type="range" class="send-verb" min="0" max="1" step="0.01" value="0"></div>
+              </div>
+            </div>
+
+            <!-- Per-VCO Visualizer Settings -->
+            <div class="section-box" style="border-color:var(--viz-color);">
+              <div class="section-title" style="color:var(--viz-color);">Visualizer Display</div>
+              <div class="control-group">
+                <label>Shape Mode</label>
+                <select class="viz-shape-select">
+                  <option value="circular">Circular Oscilloscope</option>
+                  <option value="radial">Radial Expanding Waveform</option>
+                  <option value="band16">16-Band Spectrum</option>
+                  <option value="band128">128-Band Spectrum</option>
+                  <option value="graph">Spectrum Graph</option>
+                  <option value="ampCircle">Amplitude Pulse Circle</option>
+                  <option value="cube32x18">32x18 Cube Matrix</option>
+                </select>
+              </div>
+              <div class="control-group" style="margin-top:4px;">
+                <label>Line Width (<span class="line-width-val">3</span>px)</label>
+                <input type="range" class="viz-line-width" min="1" max="20" step="1" value="3">
+              </div>
+            </div>
+          </div>
+
+          <!-- Sequencer -->
+          <div class="section-box">
+            <div class="section-title">16 Step Sequencer</div>
+            <div class="sequencer-grid">
+              ${Array.from({length: 16}).map((_, i) => `
+                <div class="seq-step" data-step="${i}">
+                  <span style="font-size:0.5rem; color:var(--text-dim);">${i+1}</span>
+                  <input type="checkbox" class="seq-active" checked>
+                  <input type="range" class="seq-vel" min="0" max="1" step="0.05" value="0.8">
+                  <select class="seq-note">
+                    <option value="0">1st</option>
+                    <option value="1">2nd</option>
+                    <option value="2">3rd</option>
+                    <option value="3">4th</option>
+                    <option value="4">5th</option>
+                    <option value="all">ALL</option>
+                  </select>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+
+        // Bind events
+        const wavePreset = layer.querySelector('.wave-preset');
+        const wtPos = layer.querySelector('.wt-pos');
+        wavePreset.addEventListener('change', (e) => { wtPos.value = e.target.value; this.params.wtPos = parseFloat(e.target.value); });
+        wtPos.addEventListener('input', (e) => this.params.wtPos = parseFloat(e.target.value));
+
+        layer.querySelector('.filter-type').addEventListener('change', (e) => this.params.filterType = e.target.value);
+        layer.querySelector('.filter-cutoff').addEventListener('input', (e) => this.params.cutoff = parseFloat(e.target.value));
+        layer.querySelector('.filter-reso').addEventListener('input', (e) => this.params.resonance = parseFloat(e.target.value));
+
+        layer.querySelector('.env-a').addEventListener('input', (e) => this.params.attack = parseFloat(e.target.value));
+        layer.querySelector('.env-d').addEventListener('input', (e) => this.params.decay = parseFloat(e.target.value));
+        layer.querySelector('.env-s').addEventListener('input', (e) => this.params.sustain = parseFloat(e.target.value));
+        layer.querySelector('.env-r').addEventListener('input', (e) => this.params.release = parseFloat(e.target.value));
+
+        layer.querySelector('.send-dist').addEventListener('input', (e) => this.params.sendDist = parseFloat(e.target.value));
+        layer.querySelector('.send-chorus').addEventListener('input', (e) => this.params.sendChorus = parseFloat(e.target.value));
+        layer.querySelector('.send-delay').addEventListener('input', (e) => this.params.sendDelay = parseFloat(e.target.value));
+        layer.querySelector('.send-verb').addEventListener('input', (e) => this.params.sendReverb = parseFloat(e.target.value));
+
+        // Viz events
+        layer.querySelector('.viz-color-picker').addEventListener('input', (e) => this.params.vizColor = e.target.value);
+        layer.querySelector('.viz-shape-select').addEventListener('change', (e) => this.params.vizShape = e.target.value);
+        const lwInput = layer.querySelector('.viz-line-width');
+        lwInput.addEventListener('input', (e) => {
+          this.params.vizLineWidth = parseInt(e.target.value);
+          layer.querySelector('.line-width-val').textContent = e.target.value;
+        });
+
+        const stepElems = layer.querySelectorAll('.seq-step');
+        stepElems.forEach((stepEl, idx) => {
+          stepEl.querySelector('.seq-active').addEventListener('change', (e) => this.steps[idx].active = e.target.checked);
+          stepEl.querySelector('.seq-vel').addEventListener('input', (e) => this.steps[idx].velocity = parseFloat(e.target.value));
+          stepEl.querySelector('.seq-note').addEventListener('change', (e) => this.steps[idx].noteVal = e.target.value);
+        });
+
+        return layer;
+      }
+
+      playNote(midiNote, velocity, time) {
+        if (!audioCtx) return;
+
+        if (!this.analyser) {
+          this.analyser = audioCtx.createAnalyser();
+          this.analyser.fftSize = 512;
+        }
+
+        const wtVal = getModulatedValue(`layer_${this.id}_wtPos`, this.params.wtPos, 0, 1);
+        const cutoffVal = getModulatedValue(`layer_${this.id}_cutoff`, this.params.cutoff, 20, 20000);
+        const resoVal = getModulatedValue(`layer_${this.id}_resonance`, this.params.resonance, 0.1, 20);
+
+        const osc = audioCtx.createOscillator();
+        const wave = createCustomWavetable(audioCtx, wtVal);
+        osc.setPeriodicWave(wave);
+
+        const transpose = parseInt(document.getElementById('master-transpose').value);
+        const freq = 440 * Math.pow(2, (midiNote + transpose - 69) / 12);
+        osc.frequency.setValueAtTime(freq, time);
+
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = this.params.filterType;
+        filter.frequency.setValueAtTime(cutoffVal, time);
+        filter.Q.setValueAtTime(resoVal, time);
+
+        const envGain = audioCtx.createGain();
+        const now = time;
+        const a = getModulatedValue(`layer_${this.id}_attack`, this.params.attack, 0.001, 2);
+        const d = getModulatedValue(`layer_${this.id}_decay`, this.params.decay, 0.01, 2);
+        const s = getModulatedValue(`layer_${this.id}_sustain`, this.params.sustain, 0, 1);
+        const r = getModulatedValue(`layer_${this.id}_release`, this.params.release, 0.01, 3);
+
+        const peakVol = velocity;
+        envGain.gain.setValueAtTime(0, now);
+        envGain.gain.linearRampToValueAtTime(peakVol, now + a);
+        envGain.gain.linearRampToValueAtTime(peakVol * s, now + a + d);
+        envGain.gain.setValueAtTime(peakVol * s, now + a + d + 0.1);
+        envGain.gain.exponentialRampToValueAtTime(0.0001, now + a + d + 0.1 + r);
+
+        osc.connect(filter);
+        filter.connect(envGain);
+
+        // Connect layer signal to layer's AnalyserNode
+        envGain.connect(this.analyser);
+
+        // Connect from Analyser to Master & FX
+        this.analyser.connect(masterGain);
+
+        if (this.params.sendDist > 0 && fxDistortion) {
+          const g = audioCtx.createGain(); g.gain.value = this.params.sendDist;
+          this.analyser.connect(g); g.connect(fxDistortion);
+        }
+        if (this.params.sendChorus > 0 && fxChorusDelay) {
+          const g = audioCtx.createGain(); g.gain.value = this.params.sendChorus;
+          this.analyser.connect(g); g.connect(fxChorusDelay);
+        }
+        if (this.params.sendDelay > 0 && fxDelayL) {
+          const g = audioCtx.createGain(); g.gain.value = this.params.sendDelay;
+          this.analyser.connect(g); g.connect(fxDelayL);
+        }
+        if (this.params.sendReverb > 0 && fxReverbConvolver) {
+          const g = audioCtx.createGain(); g.gain.value = this.params.sendReverb;
+          this.analyser.connect(g); g.connect(fxReverbConvolver);
+        }
+
+        osc.start(now);
+        osc.stop(now + a + d + 0.1 + r + 0.1);
+      }
+    }
+
+    // --- Modulation Helper ---
+    function getModulatedValue(paramId, baseValue, minVal, maxVal) {
+      const assign = modAssignments[paramId];
+      if (!assign || assign.source === 'none') return baseValue;
+
+      const srcValue = modSources[assign.source] || 0;
+      const modAmount = assign.amount;
+      const range = maxVal - minVal;
+
+      let result = baseValue + (srcValue * modAmount * range);
+      return Math.max(minVal, Math.min(maxVal, result));
+    }
+
+    function updateModSourceOptions() {
+      const select = document.getElementById('mod-source-select');
+      const currentVal = select.value;
+      select.innerHTML = `
+        <option value="none">None</option>
+        <option value="mouseX">Mouse X</option>
+        <option value="mouseY">Mouse Y</option>
+        <option value="mouseSpeed">Mouse Speed</option>
+        <option value="camX">Camera X</option>
+        <option value="camY">Camera Y</option>
+        <option value="camMotion">Camera Motion</option>
+        ${lfoList.map(l => `<option value="lfo_${l.id}">LFO ${l.id}</option>`).join('')}
+      `;
+      select.value = currentVal;
+    }
+
+    function addLayer() {
+      layerIdCounter++;
+      const layer = new VCOLayer(layerIdCounter, document.getElementById('layers-container'));
+      vcoLayers.push(layer);
+      bindModulationEvents();
+    }
+
+    function removeLayer(id) {
+      vcoLayers = vcoLayers.filter(l => l.id !== id);
+      const elem = document.getElementById(`layer-${id}`);
+      if (elem) elem.remove();
+    }
+
+    // --- Sequencer Engine ---
+    function stepSequence() {
+      if (!isPlaying) return;
+
+      const now = audioCtx ? audioCtx.currentTime : 0;
+
+      // 1. Calculate Modulated Chord Change Rate
+      const rawRateVal = parseFloat(document.getElementById('chord-rate-slider').value);
+      const moddedRateVal = getModulatedValue('chordRate', rawRateVal, 0, 4);
+      const rateIdx = Math.max(0, Math.min(4, Math.round(moddedRateVal)));
+      const rateObj = CHORD_CHANGE_RATES[rateIdx];
+
+      document.getElementById('chord-rate-val').textContent = rateObj.label.split(' ')[0];
+
+      // 2. Update Chord on timing intervals
+      if (totalElapsedSteps % rateObj.steps === 0 || totalElapsedSteps === 0) {
+        const rawChordVal = parseFloat(document.getElementById('chord-slider').value);
+        const moddedChordVal = getModulatedValue('chordSlider', rawChordVal, 0, 8);
+        let chordIdx = Math.max(0, Math.min(8, Math.round(moddedChordVal)));
+
+        let chordObj = CHORD_TABLE[chordIdx];
+        if (OVERRIDE_CHORDS[lastPlayedChordName]) {
+          chordObj = OVERRIDE_CHORDS[lastPlayedChordName];
+        }
+        currentChordObj = chordObj;
+        lastPlayedChordName = chordObj.name;
+        document.getElementById('chord-name').textContent = chordObj.name;
+      }
+
+      document.querySelectorAll('.seq-step').forEach(el => el.classList.remove('playing'));
+
+      // 3. Trigger VCO Layers
+      vcoLayers.forEach(layer => {
+        const step = layer.steps[currentStep];
+        const stepEl = layer.element.querySelectorAll('.seq-step')[currentStep];
+        if (stepEl) stepEl.classList.add('playing');
+
+        if (step.active) {
+          const notes = currentChordObj.notes;
+          if (step.noteVal === 'all') {
+            notes.forEach(midiNote => layer.playNote(midiNote, step.velocity, now));
+          } else {
+            const noteIdx = parseInt(step.noteVal, 10);
+            const midiNote = notes[noteIdx % notes.length];
+            layer.playNote(midiNote, step.velocity, now);
+          }
+        }
+      });
+
+      currentStep = (currentStep + 1) % 16;
+      totalElapsedSteps++;
+
+      const bpm = parseFloat(document.getElementById('master-bpm').value);
+      const intervalMs = (60 / bpm / 4) * 1000;
+      seqTimer = setTimeout(stepSequence, intervalMs);
+    }
+
+    // --- Modulation Context Menu ---
+    let activeModTargetParamId = null;
+
+    function bindModulationEvents() {
+      document.querySelectorAll('.mod-param').forEach(elem => {
+        elem.removeEventListener('contextmenu', handleContextMenu);
+        elem.addEventListener('contextmenu', handleContextMenu);
+      });
+    }
+
+    function handleContextMenu(e) {
+      e.preventDefault();
+      const paramId = e.currentTarget.getAttribute('data-param-id');
+      if (!paramId) return;
+
+      activeModTargetParamId = paramId;
+      const menu = document.getElementById('mod-menu');
+      menu.style.display = 'block';
+      menu.style.left = `${e.pageX}px`;
+      menu.style.top = `${e.pageY}px`;
+
+      document.getElementById('mod-target-title').textContent = `Mod Target: ${paramId}`;
+      updateModSourceOptions();
+
+      const assign = modAssignments[paramId] || { source: 'none', amount: 0 };
+      document.getElementById('mod-source-select').value = assign.source;
+      document.getElementById('mod-amount-range').value = assign.amount;
+    }
+
+    document.getElementById('mod-save-btn').addEventListener('click', () => {
+      if (activeModTargetParamId) {
+        const src = document.getElementById('mod-source-select').value;
+        const amt = parseFloat(document.getElementById('mod-amount-range').value);
+
+        modAssignments[activeModTargetParamId] = { source: src, amount: amt };
+
+        const targetElem = document.querySelector(`[data-param-id="${activeModTargetParamId}"]`);
+        if (targetElem) {
+          if (src !== 'none') targetElem.classList.add('has-mod');
+          else targetElem.classList.remove('has-mod');
+        }
+      }
+      document.getElementById('mod-menu').style.display = 'none';
+    });
+
+    document.getElementById('mod-close-btn').addEventListener('click', () => {
+      document.getElementById('mod-menu').style.display = 'none';
+    });
+
+    // --- Camera Tracking Engine (Downscaled 80x45) ---
+    const camVideo = document.getElementById('cam-video');
+    const camCanvas = document.getElementById('cam-canvas');
+    const camCtx = camCanvas.getContext('2d', { willReadFrequently: true });
+    let prevCamFrame = null;
+    let isCamRunning = false;
+
+    async function initCameraDevices() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(d => d.kind === 'videoinput');
+        const select = document.getElementById('cam-select');
+        select.innerHTML = '<option value="">Select...</option>';
+        videoDevices.forEach((d, idx) => {
+          select.innerHTML += `<option value="${d.deviceId}">${d.label || `Cam ${idx+1}`}</option>`;
+        });
+      } catch (err) {
+        console.warn("Camera Enumeration Error:", err);
+      }
+    }
+
+    async function startCameraStream(deviceId) {
+      if (camVideo.srcObject) {
+        camVideo.srcObject.getTracks().forEach(t => t.stop());
+      }
+
+      const constraints = { video: deviceId ? { deviceId: { exact: deviceId } } : true };
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        camVideo.srcObject = stream;
+        camVideo.play();
+        isCamRunning = true;
+        document.getElementById('cam-status').textContent = "Camera: Active";
+        document.getElementById('cam-status').style.color = "#2ed573";
+        await initCameraDevices();
+        requestAnimationFrame(processCameraFrame);
+      } catch (err) {
+        document.getElementById('cam-status').textContent = "Camera: Blocked/Error";
+        document.getElementById('cam-status').style.color = "#ff4757";
+        alert("Camera Access Error: " + err.message);
+      }
+    }
+
+    document.getElementById('btn-start-cam').addEventListener('click', () => {
+      startCameraStream(document.getElementById('cam-select').value);
+    });
+
+    document.getElementById('cam-select').addEventListener('change', (e) => {
+      if (e.target.value) startCameraStream(e.target.value);
+    });
+
+    function processCameraFrame() {
+      if (!isCamRunning || camVideo.paused || camVideo.ended) return;
+
+      const brightness = parseFloat(document.getElementById('cam-brightness').value);
+      const contrast = parseFloat(document.getElementById('cam-contrast').value);
+
+      camCtx.filter = `brightness(${brightness}) contrast(${contrast})`;
+      camCtx.drawImage(camVideo, 0, 0, 80, 45);
+      
+      const frame = camCtx.getImageData(0, 0, 80, 45);
+      const data = frame.data;
+
+      if (prevCamFrame && prevCamFrame.length === data.length) {
+        let maxDiff = 0, maxX = 0, maxY = 0, totalDiff = 0;
+
+        for (let y = 0; y < 45; y++) {
+          for (let x = 0; x < 80; x++) {
+            const idx = (y * 80 + x) * 4;
+            const diff = Math.abs(data[idx] - prevCamFrame[idx]) +
+                         Math.abs(data[idx+1] - prevCamFrame[idx+1]) +
+                         Math.abs(data[idx+2] - prevCamFrame[idx+2]);
+
+            totalDiff += diff;
+            if (diff > maxDiff) {
+              maxDiff = diff;
+              maxX = x;
+              maxY = y;
+            }
+          }
+        }
+
+        modSources.camX = maxX / 80;
+        modSources.camY = 1.0 - (maxY / 45);
+        modSources.camMotion = Math.min(totalDiff / (80 * 45 * 80), 1.0);
+
+        document.getElementById('val-cx').textContent = modSources.camX.toFixed(2);
+        document.getElementById('val-cy').textContent = modSources.camY.toFixed(2);
+        document.getElementById('val-cm').textContent = modSources.camMotion.toFixed(2);
+      }
+
+      prevCamFrame = new Uint8Array(data);
+      requestAnimationFrame(processCameraFrame);
+    }
+
+    // --- Multi-Layered Audio Visualizer Engine & Separate Window System ---
+    let vizWindow = null;
+    let vizCanvas = null;
+    let vizCtx = null;
+    let vizParticles = [];
+
+    const btnOpenViz = document.getElementById('btn-open-viz');
+    const vizModal = document.getElementById('viz-modal');
+    const modalCanvas = document.getElementById('modal-viz-canvas');
+
+    btnOpenViz.addEventListener('click', () => {
+      openVisualizerWindow();
+    });
+
+    document.getElementById('viz-modal-close').addEventListener('click', () => {
+      vizModal.style.display = 'none';
+      document.getElementById('val-viz-status').textContent = "Closed";
+    });
+
+    function openVisualizerWindow() {
+      // Attempt Popout Window
+      try {
+        vizWindow = window.open("", "SynthVisualizerWindow", "width=1280,height=720,menubar=no,toolbar=no,location=no,status=no");
+        if (vizWindow && vizWindow.document) {
+          vizWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Audio Visualizer - 1920x1080</title>
+              <style>
+                * { margin:0; padding:0; box-sizing:border-box; background:#000; overflow:hidden; }
+                canvas { width:100vw; height:100vh; object-fit:contain; display:block; cursor:crosshair; }
+              </style>
+            </head>
+            <body>
+              <canvas id="viz-canvas" width="1920" height="1080"></canvas>
+            </body>
+            </html>
+          `);
+          vizWindow.document.close();
+          vizCanvas = vizWindow.document.getElementById('viz-canvas');
+          vizCtx = vizCanvas.getContext('2d');
+
+          // Sync mouse coordinates from popup window
+          vizCanvas.addEventListener('mousemove', (e) => {
+            const rect = vizCanvas.getBoundingClientRect();
+            modSources.mouseX = (e.clientX - rect.left) / rect.width;
+            modSources.mouseY = 1.0 - ((e.clientY - rect.top) / rect.height);
+          });
+
+          document.getElementById('val-viz-status').textContent = "Popout Window";
+          requestAnimationFrame(renderVisualizerFrame);
+          return;
+        }
+      } catch (err) {
+        console.warn("Popout window blocked or failed, falling back to overlay modal:", err);
+      }
+
+      // Fallback: Fullscreen Modal Overlay
+      vizModal.style.display = 'flex';
+      vizCanvas = modalCanvas;
+      vizCtx = vizCanvas.getContext('2d');
+      document.getElementById('val-viz-status').textContent = "Modal Overlay";
+
+      modalCanvas.addEventListener('mousemove', (e) => {
+        const rect = modalCanvas.getBoundingClientRect();
+        modSources.mouseX = (e.clientX - rect.left) / rect.width;
+        modSources.mouseY = 1.0 - ((e.clientY - rect.top) / rect.height);
+      });
+
+      requestAnimationFrame(renderVisualizerFrame);
+    }
+
+    // --- Main Visualizer Frame Rendering Function ---
+    function renderVisualizerFrame() {
+      if (!vizCanvas || !vizCtx) return;
+
+      const W = 1920, H = 1080;
+      const cx = W / 2, cy = H / 2;
+
+      // 1. Post-Effect: Delay Echo Persistence
+      // Find maximum delay send across layers
+      let maxDelaySend = 0;
+      vcoLayers.forEach(l => { maxDelaySend = Math.max(maxDelaySend, l.params.sendDelay); });
+      const fadeAlpha = Math.max(0.06, 0.45 - (maxDelaySend * 0.38));
+
+      vizCtx.fillStyle = `rgba(13, 15, 23, ${fadeAlpha})`;
+      vizCtx.fillRect(0, 0, W, H);
+
+      // 2. Render Mouse Particle Trails
+      renderMouseParticles(vizCtx, W, H);
+
+      // 3. Render Each VCO Layer
+      vcoLayers.forEach(layer => {
+        if (!layer.analyser) return;
+
+        const fftSize = layer.analyser.frequencyBinCount;
+        const freqData = new Uint8Array(fftSize);
+        const timeData = new Uint8Array(fftSize);
+
+        layer.analyser.getByteFrequencyData(freqData);
+        layer.analyser.getByteTimeDomainData(timeData);
+
+        // Calculate average amplitude
+        let sumAmp = 0;
+        for (let i = 0; i < fftSize; i++) sumAmp += Math.abs(timeData[i] - 128);
+        const avgAmp = sumAmp / (fftSize * 128);
+
+        vizCtx.save();
+
+        // --- Post-Effect: Distortion (Screen Shake / Jitter) ---
+        if (layer.params.sendDist > 0.05) {
+          const shakeMag = layer.params.sendDist * 35 * (avgAmp + 0.1);
+          const shakeX = (Math.random() - 0.5) * shakeMag;
+          const shakeY = (Math.random() - 0.5) * shakeMag;
+          vizCtx.translate(shakeX, shakeY);
+        }
+
+        // --- Post-Effect: Reverb (Glow / Blur) ---
+        if (layer.params.sendReverb > 0.05) {
+          vizCtx.shadowBlur = layer.params.sendReverb * 35;
+          vizCtx.shadowColor = layer.params.vizColor;
+        } else {
+          vizCtx.shadowBlur = 0;
+        }
+
+        vizCtx.strokeStyle = layer.params.vizColor;
+        vizCtx.fillStyle = layer.params.vizColor;
+        vizCtx.lineWidth = layer.params.vizLineWidth;
+        vizCtx.lineCap = 'round';
+        vizCtx.lineJoin = 'round';
+
+        // --- Shape Rendering Modes ---
+        switch (layer.params.vizShape) {
+          case 'circular':
+            renderCircularOscilloscope(vizCtx, timeData, cx, cy, layer);
+            break;
+
+          case 'radial':
+            renderRadialWaveform(vizCtx, freqData, cx, cy, layer);
+            break;
+
+          case 'band16':
+            renderSpectrumBands(vizCtx, freqData, 16, W, H, layer);
+            break;
+
+          case 'band128':
+            renderSpectrumBands(vizCtx, freqData, 128, W, H, layer);
+            break;
+
+          case 'graph':
+            renderSpectrumGraph(vizCtx, freqData, W, H, layer);
+            break;
+
+          case 'ampCircle':
+            renderAmplitudeCircle(vizCtx, avgAmp, cx, cy, layer);
+            break;
+
+          case 'cube32x18':
+            renderCubeMatrix(vizCtx, freqData, W, H, layer);
+            break;
+        }
+
+        // --- Post-Effect: Chorus (Glitch / RGB Split Offset) ---
+        if (layer.params.sendChorus > 0.1 && Math.random() < layer.params.sendChorus) {
+          vizCtx.save();
+          const glitchX = (Math.random() - 0.5) * layer.params.sendChorus * 50;
+          vizCtx.translate(glitchX, 0);
+          vizCtx.strokeStyle = '#00f0ff';
+          vizCtx.globalAlpha = 0.6;
+          vizCtx.stroke();
+          vizCtx.restore();
+        }
+
+        vizCtx.restore();
+      });
+
+      if (vizWindow && !vizWindow.closed) {
+        requestAnimationFrame(renderVisualizerFrame);
+      } else if (vizModal.style.display === 'flex') {
+        requestAnimationFrame(renderVisualizerFrame);
+      } else {
+        document.getElementById('val-viz-status').textContent = "Closed";
+      }
+    }
+
+    // --- Shape Mode 1: Circular Oscilloscope ---
+    function renderCircularOscilloscope(ctx, timeData, cx, cy, layer) {
+      const len = timeData.length;
+      const baseRadius = 260;
+      ctx.beginPath();
+      for (let i = 0; i < len; i++) {
+        const angle = (i / len) * Math.PI * 2;
+        const v = (timeData[i] - 128) / 128.0;
+        const r = baseRadius + v * 120;
+        const x = cx + Math.cos(angle) * r;
+        const y = cy + Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
+
+    // --- Shape Mode 2: Radial Expanding Waveform ---
+    function renderRadialWaveform(ctx, freqData, cx, cy, layer) {
+      const len = 64;
+      for (let i = 0; i < len; i++) {
+        const angle = (i / len) * Math.PI * 2;
+        const val = freqData[i] / 255.0;
+        const innerR = 60;
+        const outerR = innerR + val * 380;
+
+        const x1 = cx + Math.cos(angle) * innerR;
+        const y1 = cy + Math.sin(angle) * innerR;
+        const x2 = cx + Math.cos(angle) * outerR;
+        const y2 = cy + Math.sin(angle) * outerR;
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+    }
+
+    // --- Shape Mode 3 & 4: Band Spectrum Analyzer (16 or 128) ---
+    function renderSpectrumBands(ctx, freqData, bandCount, W, H, layer) {
+      const barWidth = (W / bandCount) - 4;
+      const step = Math.floor(freqData.length / bandCount);
+
+      for (let i = 0; i < bandCount; i++) {
+        const val = freqData[i * step] / 255.0;
+        const barHeight = val * (H * 0.7);
+        const x = i * (barWidth + 4) + 2;
+        const y = H - barHeight;
+
+        ctx.fillRect(x, y, barWidth, barHeight);
+      }
+    }
+
+    // --- Shape Mode 5: Spectrum Graph ---
+    function renderSpectrumGraph(ctx, freqData, W, H, layer) {
+      const len = freqData.length;
+      ctx.beginPath();
+      ctx.moveTo(0, H);
+      for (let i = 0; i < len; i++) {
+        const x = (i / len) * W;
+        const y = H - (freqData[i] / 255.0) * (H * 0.8);
+        ctx.lineTo(x, y);
+      }
+      ctx.lineTo(W, H);
+      ctx.closePath();
+      
+      ctx.globalAlpha = 0.25;
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+      ctx.stroke();
+    }
+
+    // --- Shape Mode 6: Amplitude Pulse Circle ---
+    function renderAmplitudeCircle(ctx, avgAmp, cx, cy, layer) {
+      const radius = 80 + avgAmp * 450;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * 0.6, 0, Math.PI * 2);
+      ctx.globalAlpha = 0.2;
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+    }
+
+    // --- Shape Mode 7: 32x18 Cube Matrix ---
+    function renderCubeMatrix(ctx, freqData, W, H, layer) {
+      const cols = 32, rows = 18;
+      const cellW = W / cols;
+      const cellH = H / rows;
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const idx = (r * cols + c) % freqData.length;
+          const val = freqData[idx] / 255.0;
+          if (val < 0.05) continue;
+
+          const cx = c * cellW + cellW / 2;
+          const cy = r * cellH + cellH / 2;
+          const size = Math.min(cellW, cellH) * val * 0.9;
+
+          ctx.strokeRect(cx - size / 2, cy - size / 2, size, size);
+        }
+      }
+    }
+
+    // --- Mouse Particle System ---
+    function renderMouseParticles(ctx, W, H) {
+      const mouseX = modSources.mouseX * W;
+      const mouseY = (1.0 - modSources.mouseY) * H;
+      const speed = modSources.mouseSpeed;
+
+      // Read Modulatable Particle Parameters
+      const rawRatio = parseFloat(document.getElementById('particle-ratio-slider').value);
+      const modRatio = getModulatedValue('particleRatio', rawRatio, 0.1, 5.0);
+
+      const rawSize = parseFloat(document.getElementById('particle-size-slider').value);
+      const modSize = getModulatedValue('particleSize', rawSize, 2, 50);
+
+      const shape = document.getElementById('particle-shape').value;
+
+      // Spawn Particles based on mouse speed & modRatio
+      const spawnCount = Math.floor(modRatio * (1 + speed * 4));
+      for (let i = 0; i < spawnCount; i++) {
+        vizParticles.push({
+          x: mouseX + (Math.random() - 0.5) * 15,
+          y: mouseY + (Math.random() - 0.5) * 15,
+          vx: (Math.random() - 0.5) * (2 + speed * 6),
+          vy: (Math.random() - 0.5) * (2 + speed * 6),
+          size: modSize * (0.5 + Math.random() * 0.8),
+          alpha: 1.0,
+          decay: 0.02 + Math.random() * 0.03,
+          color: `hsl(${(Date.now() / 10) % 360}, 100%, 70%)`
+        });
+      }
+
+      // Update & Render Particles
+      for (let i = vizParticles.length - 1; i >= 0; i--) {
+        const p = vizParticles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.alpha -= p.decay;
+
+        if (p.alpha <= 0) {
+          vizParticles.splice(i, 1);
+          continue;
+        }
+
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        ctx.fillStyle = p.color;
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 2;
+
+        ctx.beginPath();
+        switch (shape) {
+          case 'square':
+            ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+            break;
+
+          case 'star':
+            drawStar(ctx, p.x, p.y, 5, p.size, p.size / 2);
+            ctx.fill();
+            break;
+
+          case 'ring':
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.stroke();
+            break;
+
+          case 'spark':
+            ctx.moveTo(p.x - p.size, p.y); ctx.lineTo(p.x + p.size, p.y);
+            ctx.moveTo(p.x, p.y - p.size); ctx.lineTo(p.x, p.y + p.size);
+            ctx.stroke();
+            break;
+
+          case 'circle':
+          default:
+            ctx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2);
+            ctx.fill();
+            break;
+        }
+        ctx.restore();
+      }
+    }
+
+    function drawStar(ctx, cx, cy, spikes, outerRadius, innerRadius) {
+      let rot = (Math.PI / 2) * 3;
+      let x = cx, y = cy;
+      const step = Math.PI / spikes;
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - outerRadius);
+      for (let i = 0; i < spikes; i++) {
+        x = cx + Math.cos(rot) * outerRadius;
+        y = cy + Math.sin(rot) * outerRadius;
+        ctx.lineTo(x, y);
+        rot += step;
+
+        x = cx + Math.cos(rot) * innerRadius;
+        y = cy + Math.sin(rot) * innerRadius;
+        ctx.lineTo(x, y);
+        rot += step;
+      }
+      ctx.lineTo(cx, cy - outerRadius);
+      ctx.closePath();
+    }
+
+    // --- Save & Load JSON Preset Engine ---
+    function getFullState() {
+      return {
+        presetName: prompt("Enter Preset Name:", "VisualizerSynthPreset") || "VisualizerSynthPreset",
+        master: {
+          vol: document.getElementById('master-vol').value,
+          bpm: document.getElementById('master-bpm').value,
+          transpose: document.getElementById('master-transpose').value,
+          chordSlider: document.getElementById('chord-slider').value,
+          chordRateSlider: document.getElementById('chord-rate-slider').value,
+          mouseSens: document.getElementById('mouse-sens').value
+        },
+        particles: {
+          shape: document.getElementById('particle-shape').value,
+          ratio: document.getElementById('particle-ratio-slider').value,
+          size: document.getElementById('particle-size-slider').value
+        },
+        fx: {
+          distDrive: document.getElementById('fx-dist-drive').value,
+          chorusRate: document.getElementById('fx-chorus-rate').value,
+          chorusDepth: document.getElementById('fx-chorus-depth').value,
+          delayTime: document.getElementById('fx-delay-time').value,
+          delayFb: document.getElementById('fx-delay-fb').value,
+          verbTime: document.getElementById('fx-verb-time').value
+        },
+        lfos: lfoList.map(l => ({ id: l.id, type: l.type, mode: l.mode, msPeriod: l.msPeriod, noteRatio: l.noteRatio })),
+        vcos: vcoLayers.map(l => ({
+          id: l.id,
+          params: l.params,
+          steps: l.steps
+        })),
+        modAssignments: modAssignments
+      };
+    }
+
+    function loadFullState(state) {
+      if (!state) return;
+
+      if (state.master) {
+        document.getElementById('master-vol').value = state.master.vol || 0.7;
+        document.getElementById('master-bpm').value = state.master.bpm || 120;
+        document.getElementById('master-transpose').value = state.master.transpose || 0;
+        document.getElementById('chord-slider').value = state.master.chordSlider || 0;
+        document.getElementById('chord-rate-slider').value = state.master.chordRateSlider || 2;
+        document.getElementById('mouse-sens').value = state.master.mouseSens || 1.0;
+        document.getElementById('bpm-val').textContent = state.master.bpm || 120;
+        document.getElementById('transpose-val').textContent = state.master.transpose || 0;
+      }
+
+      if (state.particles) {
+        document.getElementById('particle-shape').value = state.particles.shape || 'circle';
+        document.getElementById('particle-ratio-slider').value = state.particles.ratio || 1.0;
+        document.getElementById('particle-size-slider').value = state.particles.size || 12;
+      }
+
+      if (state.fx) {
+        document.getElementById('fx-dist-drive').value = state.fx.distDrive || 0;
+        document.getElementById('fx-chorus-rate').value = state.fx.chorusRate || 1.5;
+        document.getElementById('fx-chorus-depth').value = state.fx.chorusDepth || 0.3;
+        document.getElementById('fx-delay-time').value = state.fx.delayTime || 0.3;
+        document.getElementById('fx-delay-fb').value = state.fx.delayFb || 0.4;
+        document.getElementById('fx-verb-time').value = state.fx.verbTime || 2.0;
+
+        updateDistortionCurve(parseFloat(state.fx.distDrive || 0));
+        updateReverbImpulse(parseFloat(state.fx.verbTime || 2.0));
+      }
+
+      lfoList = [];
+      document.getElementById('lfos-container').innerHTML = '';
+      if (state.lfos) {
+        state.lfos.forEach(lData => {
+          const lfo = new LFO(lData.id);
+          lfo.type = lData.type;
+          lfo.mode = lData.mode;
+          lfo.msPeriod = lData.msPeriod;
+          lfo.noteRatio = lData.noteRatio;
+          lfoList.push(lfo);
+          renderLFOUI(lfo);
+        });
+        lfoIdCounter = Math.max(...state.lfos.map(l => l.id), 0);
+      }
+
+      vcoLayers = [];
+      document.getElementById('layers-container').innerHTML = '';
+      if (state.vcos) {
+        state.vcos.forEach(vData => {
+          const layer = new VCOLayer(vData.id, document.getElementById('layers-container'));
+          layer.params = vData.params;
+          layer.steps = vData.steps;
+
+          const el = layer.element;
+          el.querySelector('.wt-pos').value = layer.params.wtPos;
+          el.querySelector('.filter-type').value = layer.params.filterType;
+          el.querySelector('.filter-cutoff').value = layer.params.cutoff;
+          el.querySelector('.filter-reso').value = layer.params.resonance;
+          el.querySelector('.env-a').value = layer.params.attack;
+          el.querySelector('.env-d').value = layer.params.decay;
+          el.querySelector('.env-s').value = layer.params.sustain;
+          el.querySelector('.env-r').value = layer.params.release;
+          el.querySelector('.send-dist').value = layer.params.sendDist || 0;
+          el.querySelector('.send-chorus').value = layer.params.sendChorus || 0;
+          el.querySelector('.send-delay').value = layer.params.sendDelay || 0;
+          el.querySelector('.send-verb').value = layer.params.sendReverb || 0;
+
+          if (el.querySelector('.viz-color-picker')) el.querySelector('.viz-color-picker').value = layer.params.vizColor || '#00f0ff';
+          if (el.querySelector('.viz-shape-select')) el.querySelector('.viz-shape-select').value = layer.params.vizShape || 'circular';
+          if (el.querySelector('.viz-line-width')) el.querySelector('.viz-line-width').value = layer.params.vizLineWidth || 3;
+
+          const stepElems = el.querySelectorAll('.seq-step');
+          layer.steps.forEach((s, idx) => {
+            if (stepElems[idx]) {
+              stepElems[idx].querySelector('.seq-active').checked = s.active;
+              stepElems[idx].querySelector('.seq-vel').value = s.velocity;
+              stepElems[idx].querySelector('.seq-note').value = s.noteVal;
+            }
+          });
+
+          vcoLayers.push(layer);
+        });
+        layerIdCounter = Math.max(...state.vcos.map(v => v.id), 0);
+      }
+
+      Object.assign(modAssignments, state.modAssignments || {});
+      bindModulationEvents();
+      updateModSourceOptions();
+    }
+
+    document.getElementById('btn-save-json').addEventListener('click', () => {
+      const state = getFullState();
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+      const dlAnchor = document.createElement('a');
+      dlAnchor.setAttribute("href", dataStr);
+      dlAnchor.setAttribute("download", `${state.presetName}.json`);
+      document.body.appendChild(dlAnchor);
+      dlAnchor.click();
+      dlAnchor.remove();
+    });
+
+    document.getElementById('btn-load-json').addEventListener('click', () => {
+      document.getElementById('json-file-input').click();
+    });
+
+    document.getElementById('json-file-input').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const state = JSON.parse(evt.target.result);
+          loadFullState(state);
+        } catch (err) {
+          alert("Invalid JSON File: " + err.message);
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    // --- Global Controls Event Bindings ---
+    document.getElementById('btn-audio-init').addEventListener('click', () => {
+      initAudio();
+      document.getElementById('btn-audio-init').textContent = "🔊 Audio Active";
+      document.getElementById('btn-audio-init').style.background = "#2ed573";
+    });
+
+    document.getElementById('btn-add-vco').addEventListener('click', () => addLayer());
+    document.getElementById('btn-add-lfo').addEventListener('click', () => addLFO());
+
+    document.getElementById('btn-play').addEventListener('click', (e) => {
+      initAudio();
+      isPlaying = !isPlaying;
+      if (isPlaying) {
+        e.target.textContent = "⏸ Pause";
+        e.target.style.background = "#ff4757";
+        currentStep = 0;
+        totalElapsedSteps = 0;
+        stepSequence();
+      } else {
+        e.target.textContent = "▶ Play";
+        e.target.style.background = "var(--accent-color)";
+        clearTimeout(seqTimer);
+        document.querySelectorAll('.seq-step').forEach(el => el.classList.remove('playing'));
+      }
+    });
+
+    document.getElementById('master-vol').addEventListener('input', (e) => {
+      if (masterGain) masterGain.gain.value = parseFloat(e.target.value);
+    });
+
+    document.getElementById('master-bpm').addEventListener('input', (e) => {
+      document.getElementById('bpm-val').textContent = e.target.value;
+    });
+
+    document.getElementById('master-transpose').addEventListener('input', (e) => {
+      document.getElementById('transpose-val').textContent = e.target.value;
+    });
+
+    document.getElementById('chord-slider').addEventListener('input', (e) => {
+      const idx = Math.round(parseFloat(e.target.value));
+      document.getElementById('chord-name').textContent = CHORD_TABLE[idx].name;
+    });
+
+    document.getElementById('chord-rate-slider').addEventListener('input', (e) => {
+      const idx = Math.round(parseFloat(e.target.value));
+      document.getElementById('chord-rate-val').textContent = CHORD_CHANGE_RATES[idx].label.split(' ')[0];
+    });
+
+    // Initial Launch Setup
+    addLFO(); // Default LFO 1
+    addLayer(); // Default VCO Layer 1
+    initCameraDevices();
+  </script>
+</body>
+</html>
